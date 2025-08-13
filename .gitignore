@@ -115,3 +115,12 @@ coverage/
 
 # Visual Studio
 .vs/
+
+# Deployment temporary files
+*.bicepparam.backup
+*.yml.backup
+/tmp/
+deployment-*.log
+
+# Azure CLI cached responses
+.azure/

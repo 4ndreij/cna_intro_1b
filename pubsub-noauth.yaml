@@ -1,8 +1,0 @@
-componentType: pubsub.redis
-version: v1
-metadata:
-- name: redisHost
-  value: ajdaprmicro-redis.internal.nicerock-93f31ef4.eastus2.azurecontainerapps.io:6379
-scopes:
-- productservice
-- orderservice
