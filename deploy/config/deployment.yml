@@ -1,0 +1,122 @@
+# Deployment Configuration
+# Edit this file to customize your deployment
+
+# Azure Configuration
+azure:
+  subscription_id: ""  # Optional, uses current subscription if empty
+  location: "eastus2"  # Azure region
+
+# Naming Configuration
+naming:
+  prefix: "daprmicro"              # Resource name prefix (will be suffixed with random chars in production)
+  environment: "dev"               # dev, staging, production
+  
+# Container Registry Configuration
+registry:
+  name: "${naming.prefix}registry"  # Will be auto-generated based on prefix
+  sku: "Basic"                     # Basic, Standard, Premium
+
+# Container Apps Configuration
+containerApps:
+  environment:
+    name: "${naming.prefix}-${naming.environment}-env"
+    dapr:
+      version: "1.15"
+      
+  # Application Configuration
+  applications:
+    productService:
+      name: "${naming.prefix}-productservice"
+      image: "productservice:latest"
+      replicas:
+        min: 1
+        max: 3
+      resources:
+        cpu: "0.5"
+        memory: "1Gi"
+      ports:
+        target: 8080
+      ingress:
+        external: true
+      dapr:
+        appId: "productservice"
+        appPort: 8080
+        
+    orderService:
+      name: "${naming.prefix}-orderservice"
+      image: "orderservice:latest"
+      replicas:
+        min: 1
+        max: 3
+      resources:
+        cpu: "0.5"
+        memory: "1Gi"
+      ports:
+        target: 8080
+      ingress:
+        external: true
+      dapr:
+        appId: "orderservice"
+        appPort: 8080
+        
+    redis:
+      name: "${naming.prefix}-redis"
+      image: "redis:7-alpine"
+      replicas:
+        min: 1
+        max: 1
+      resources:
+        cpu: "0.25"
+        memory: "0.5Gi"
+      ports:
+        target: 6379
+      ingress:
+        external: false
+        transport: "tcp"
+
+# Monitoring Configuration
+monitoring:
+  logAnalytics:
+    name: "${naming.prefix}-${naming.environment}-logs"
+    retention: 30
+    dailyQuota: 1
+    
+  applicationInsights:
+    name: "${naming.prefix}-${naming.environment}-insights"
+    
+# Dapr Components
+dapr:
+  components:
+    statestore:
+      name: "statestore"
+      type: "state.redis"
+      metadata:
+        redisHost: "${containerApps.applications.redis.name}:6379"
+      scopes:
+        - "productservice"
+        - "orderservice"
+        
+    pubsub:
+      name: "product-pubsub"
+      type: "pubsub.redis"
+      metadata:
+        redisHost: "${containerApps.applications.redis.name}:6379"
+      scopes:
+        - "productservice"
+        - "orderservice"
+
+# Environment Variables
+environment:
+  productService:
+    - name: "ASPNETCORE_ENVIRONMENT"
+      value: "Production"
+    - name: "ASPNETCORE_URLS"
+      value: "http://+:8080"
+      
+  orderService:
+    - name: "ASPNETCORE_ENVIRONMENT"
+      value: "Production"
+    - name: "ASPNETCORE_URLS"
+      value: "http://+:8080"
+    - name: "Services__ProductServiceUrl"
+      value: "http://productservice"

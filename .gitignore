@@ -1,0 +1,117 @@
+# .NET Core / ASP.NET Core / Visual Studio .gitignore
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+build/
+[Bb]in/
+[Oo]bj/
+TestResults/
+
+# Npm packages
+node_modules/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Mono Auto Generated Files
+mono_crash.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Dotnet publish
+publish/
+
+# NuGet packages
+*.nupkg
+# The packages folder can be ignored because of Package Restore
+**/packages/*
+# except build/, which is used as an MSBuild target.
+!**/packages/build/
+
+# Others
+*.log
+*.vspscc
+*.vssscc
+*.tmp
+*.bak
+*.swp
+*.lock.json
+
+# Azure Pipelines
+.azure-pipelines/
+
+# Docker
+*.dockerfile
+Dockerfile*
+
+# Dapr
+.dapr/
+
+# Local secrets
+secrets.json
+appsettings.*.local.json
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Resharper
+*.DotSettings.user
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Test explorer
+.vstest/
+
+# Others
+*.db
+*.sqlite
+*.mdf
+*.ldf
+*.pdb
+*.cache
+*.config
+*.pid
+*.psess
+*.vsp
+*.vsix
+*.vsixmanifest
+*.vsmdi
+*.testsettings
+*.vspscc
+*.vssscc
+*.docstates
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Temporary files
+~$*
+*.tmp
+*.bak
+*.swp
+*.lock
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio
+.vs/

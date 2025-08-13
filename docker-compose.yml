@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # Redis for Dapr pub/sub and state store
+  redis:
+    image: redis:7-alpine
+    container_name: dapr-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - dapr-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Zipkin for distributed tracing (optional)
+  zipkin:
+    image: openzipkin/zipkin-slim
+    container_name: dapr-zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - dapr-network
+    environment:
+      - STORAGE_TYPE=mem
+
+  # ProductService
+  productservice:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/ProductService.Dockerfile
+    container_name: productservice
+    ports:
+      - "5001:8080"
+      - "3501:3500"  # Dapr HTTP port
+    networks:
+      - dapr-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/dapr:/dapr/components
+
+  # ProductService Dapr sidecar
+  productservice-dapr:
+    image: "daprio/daprd:latest"
+    container_name: productservice-dapr
+    command: [
+      "./daprd",
+      "--app-id", "productservice",
+      "--app-port", "8080",
+      "--dapr-http-port", "3500",
+      "--dapr-grpc-port", "50001",
+      "--components-path", "/dapr/components",
+      "--config", "/dapr/components/config.yaml",
+      "--log-level", "info"
+    ]
+    volumes:
+      - "./infrastructure/dapr/:/dapr/components"
+    depends_on:
+      - productservice
+      - redis
+    network_mode: "service:productservice"
+
+  # OrderService
+  orderservice:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/OrderService.Dockerfile
+    container_name: orderservice
+    ports:
+      - "5002:8080"
+      - "3502:3500"  # Dapr HTTP port
+    networks:
+      - dapr-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/dapr:/dapr/components
+
+  # OrderService Dapr sidecar  
+  orderservice-dapr:
+    image: "daprio/daprd:latest"
+    container_name: orderservice-dapr
+    command: [
+      "./daprd",
+      "--app-id", "orderservice",
+      "--app-port", "8080",
+      "--dapr-http-port", "3500",
+      "--dapr-grpc-port", "50002",
+      "--components-path", "/dapr/components",
+      "--config", "/dapr/components/config.yaml",
+      "--log-level", "info"
+    ]
+    volumes:
+      - "./infrastructure/dapr/:/dapr/components"
+    depends_on:
+      - orderservice
+      - redis
+    network_mode: "service:orderservice"
+
+networks:
+  dapr-network:
+    driver: bridge

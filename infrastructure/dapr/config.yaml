@@ -1,0 +1,18 @@
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: dapr-config
+spec:
+  # Temporarily disable tracing to avoid Zipkin connection errors
+  # tracing:
+  #   samplingRate: "1"
+  #   zipkin:
+  #     endpointAddress: "http://localhost:9411/api/v2/spans"
+  logging:
+    appLogLevel: "info"
+  metric:
+    enabled: true
+  secrets:
+    scopes:
+      - storeName: "localsecretstore"
+        defaultAccess: "allow"

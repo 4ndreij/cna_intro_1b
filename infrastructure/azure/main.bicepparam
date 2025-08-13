@@ -1,0 +1,10 @@
+using 'main.bicep'
+
+param environmentName = 'dapr-microservices-env'
+param location = 'eastus2'
+param namePrefix = 'ajdaprmicro'
+param containerRegistryName = '${namePrefix}registry'
+param logAnalyticsName = '${namePrefix}logs'
+param appInsightsName = '${namePrefix}insights'
+param productServiceImage = 'productservice:latest'
+param orderServiceImage = 'orderservice:latest'
