@@ -38,7 +38,7 @@ echo -e "${GREEN}✅ Logged into registry: $REGISTRY_URL${NC}"
 echo -e "${YELLOW}🔨 Building ProductService...${NC}"
 cd "$PROJECT_ROOT/src/ProductService"
 
-podman build -t "productservice:latest" .
+podman build -f "$PROJECT_ROOT/infrastructure/docker/ProductService.Dockerfile" -t "productservice:latest" "$PROJECT_ROOT"
 podman tag "productservice:latest" "$REGISTRY_URL/productservice:latest"
 
 echo -e "${YELLOW}⬆️ Pushing ProductService...${NC}"
@@ -49,7 +49,7 @@ echo -e "${GREEN}✅ ProductService image pushed${NC}"
 echo -e "${YELLOW}🔨 Building OrderService...${NC}"
 cd "$PROJECT_ROOT/src/OrderService"
 
-podman build -t "orderservice:latest" .
+podman build -f "$PROJECT_ROOT/infrastructure/docker/OrderService.Dockerfile" -t "orderservice:latest" "$PROJECT_ROOT"
 podman tag "orderservice:latest" "$REGISTRY_URL/orderservice:latest"
 
 echo -e "${YELLOW}⬆️ Pushing OrderService...${NC}"
