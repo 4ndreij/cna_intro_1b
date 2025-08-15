@@ -1,0 +1,280 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "openai_endpoint": {
+        "type": "string",
+        "defaultValue": "@appsetting('OPENAI_ENDPOINT')"
+      },
+      "openai_api_key": {
+        "type": "string",
+        "defaultValue": "@appsetting('OPENAI_API_KEY')"
+      },
+      "app_insights_app_id": {
+        "type": "string", 
+        "defaultValue": "@appsetting('APP_INSIGHTS_APP_ID')"
+      },
+      "app_insights_api_key": {
+        "type": "string",
+        "defaultValue": "@appsetting('APP_INSIGHTS_API_KEY')"
+      },
+      "notification_email": {
+        "type": "string",
+        "defaultValue": "@appsetting('NOTIFICATION_EMAIL')"
+      }
+    },
+    "triggers": {
+      "scheduled_analysis": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Hour",
+          "interval": 6,
+          "timeZone": "UTC"
+        }
+      }
+    },
+    "actions": {
+      "initialize_variables": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "analysis_timestamp",
+              "type": "string",
+              "value": "@utcNow()"
+            },
+            {
+              "name": "time_range_start", 
+              "type": "string",
+              "value": "@formatDateTime(addHours(utcNow(), -24), 'yyyy-MM-ddTHH:mm:ssZ')"
+            },
+            {
+              "name": "services_analyzed",
+              "type": "array",
+              "value": ["productservice", "orderservice"]
+            },
+            {
+              "name": "analysis_results",
+              "type": "object",
+              "value": {}
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "query_performance_data": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://api.applicationinsights.io/v1/apps/@{parameters('app_insights_app_id')}/query",
+          "headers": {
+            "X-API-Key": "@parameters('app_insights_api_key')",
+            "Content-Type": "application/json"
+          },
+          "queries": {
+            "query": "requests | where timestamp > datetime(@{variables('time_range_start')}) | where name contains 'productservice' or name contains 'orderservice' | summarize avg_duration=avg(duration), request_count=count(), success_rate=avg(todouble(success)) * 100 by name | order by avg_duration desc"
+          }
+        },
+        "runAfter": {
+          "initialize_variables": ["Succeeded"]
+        }
+      },
+      "query_error_data": {
+        "type": "Http", 
+        "inputs": {
+          "method": "GET",
+          "uri": "https://api.applicationinsights.io/v1/apps/@{parameters('app_insights_app_id')}/query",
+          "headers": {
+            "X-API-Key": "@parameters('app_insights_api_key')",
+            "Content-Type": "application/json"
+          },
+          "queries": {
+            "query": "exceptions | where timestamp > datetime(@{variables('time_range_start')}) | where cloud_RoleName contains 'productservice' or cloud_RoleName contains 'orderservice' | summarize error_count=count(), unique_errors=dcount(type) by cloud_RoleName | order by error_count desc"
+          }
+        },
+        "runAfter": {
+          "query_performance_data": ["Succeeded"]
+        }
+      },
+      "query_dapr_logs": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET", 
+          "uri": "https://api.applicationinsights.io/v1/apps/@{parameters('app_insights_app_id')}/query",
+          "headers": {
+            "X-API-Key": "@parameters('app_insights_api_key')",
+            "Content-Type": "application/json"
+          },
+          "queries": {
+            "query": "traces | where timestamp > datetime(@{variables('time_range_start')}) | where message contains 'dapr' or customDimensions.app_id != '' | summarize log_count=count() by cloud_RoleName, severityLevel | order by log_count desc"
+          }
+        },
+        "runAfter": {
+          "query_error_data": ["Succeeded"]
+        }
+      },
+      "compose_analysis_data": {
+        "type": "Compose",
+        "inputs": {
+          "analysis_metadata": {
+            "timestamp": "@variables('analysis_timestamp')",
+            "time_range_hours": 24,
+            "services": "@variables('services_analyzed')"
+          },
+          "performance_data": "@body('query_performance_data')?['tables']?[0]?['rows']",
+          "error_data": "@body('query_error_data')?['tables']?[0]?['rows']", 
+          "dapr_data": "@body('query_dapr_logs')?['tables']?[0]?['rows']"
+        },
+        "runAfter": {
+          "query_dapr_logs": ["Succeeded"]
+        }
+      },
+      "call_openai_analysis": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('openai_endpoint')}/openai/deployments/gpt-35-turbo/chat/completions?api-version=2023-05-15",
+          "headers": {
+            "api-key": "@parameters('openai_api_key')",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "messages": [
+              {
+                "role": "system",
+                "content": "You are an expert DevOps engineer specializing in microservices observability. Analyze the provided telemetry data and provide actionable recommendations for improving system performance, reliability, and observability. Focus on DAPR-enabled microservices named 'productservice' and 'orderservice'. Respond in JSON format with structured recommendations."
+              },
+              {
+                "role": "user", 
+                "content": "Analyze this telemetry data from the last 24 hours and provide specific recommendations:\n\nPerformance Data:\n@{outputs('compose_analysis_data')['performance_data']}\n\nError Data:\n@{outputs('compose_analysis_data')['error_data']}\n\nDAPR Logs:\n@{outputs('compose_analysis_data')['dapr_data']}\n\nPlease provide analysis in this JSON format:\n{\n  \"analysis_summary\": \"Brief overview of findings\",\n  \"critical_issues\": [\"List of critical issues found\"],\n  \"recommendations\": [\n    {\n      \"category\": \"Performance|Reliability|Observability\",\n      \"severity\": \"High|Medium|Low\", \n      \"service\": \"productservice|orderservice|both\",\n      \"issue\": \"Description of the issue\",\n      \"recommendation\": \"Specific action to take\",\n      \"expected_impact\": \"Expected improvement\",\n      \"implementation_effort\": \"Low|Medium|High\"\n    }\n  ],\n  \"metrics_to_track\": [\"List of metrics to monitor for improvement\"]\n}"
+              }
+            ],
+            "max_tokens": 2000,
+            "temperature": 0.3
+          }
+        },
+        "runAfter": {
+          "compose_analysis_data": ["Succeeded"]
+        }
+      },
+      "parse_ai_response": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('call_openai_analysis')?['choices']?[0]?['message']?['content']",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "analysis_summary": {"type": "string"},
+              "critical_issues": {
+                "type": "array",
+                "items": {"type": "string"}
+              },
+              "recommendations": {
+                "type": "array", 
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "category": {"type": "string"},
+                    "severity": {"type": "string"},
+                    "service": {"type": "string"},
+                    "issue": {"type": "string"},
+                    "recommendation": {"type": "string"},
+                    "expected_impact": {"type": "string"},
+                    "implementation_effort": {"type": "string"}
+                  }
+                }
+              },
+              "metrics_to_track": {
+                "type": "array",
+                "items": {"type": "string"}
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "call_openai_analysis": ["Succeeded"]
+        }
+      },
+      "compose_email_content": {
+        "type": "Compose",
+        "inputs": {
+          "subject": "🤖 AI Observability Analysis Report - @{formatDateTime(variables('analysis_timestamp'), 'yyyy-MM-dd HH:mm')} UTC",
+          "body": "<!DOCTYPE html><html><head><style>body{font-family:Arial,sans-serif;margin:20px;} .header{background-color:#0078d4;color:white;padding:15px;border-radius:5px;} .section{margin:20px 0;padding:15px;border-left:4px solid #0078d4;background-color:#f8f9fa;} .recommendation{margin:10px 0;padding:10px;border-radius:3px;} .high{border-left:4px solid #d73502;background-color:#fef2f2;} .medium{border-left:4px solid #f59e0b;background-color:#fffbeb;} .low{border-left:4px solid #10b981;background-color:#f0fdf4;} .code{background-color:#f1f3f4;padding:10px;border-radius:3px;font-family:monospace;}</style></head><body><div class='header'><h2>🤖 AI-Powered Observability Analysis</h2><p>Analysis completed at: @{variables('analysis_timestamp')}</p><p>Services analyzed: @{join(variables('services_analyzed'), ', ')}</p></div><div class='section'><h3>📊 Analysis Summary</h3><p>@{body('parse_ai_response')?['analysis_summary']}</p></div><div class='section'><h3>🚨 Critical Issues</h3><ul>@{join(body('parse_ai_response')?['critical_issues'], '</li><li>')}</ul></div><div class='section'><h3>💡 Recommendations</h3>@{body('parse_ai_response')?['recommendations']}</div><div class='section'><h3>📈 Metrics to Track</h3><ul><li>@{join(body('parse_ai_response')?['metrics_to_track'], '</li><li>')}</li></ul></div><div class='section'><h3>📋 Raw Data Summary</h3><div class='code'>Performance queries returned: @{length(outputs('compose_analysis_data')['performance_data'])} rows<br/>Error queries returned: @{length(outputs('compose_analysis_data')['error_data'])} rows<br/>DAPR logs returned: @{length(outputs('compose_analysis_data')['dapr_data'])} rows</div></div><p><em>This analysis was generated by Azure OpenAI GPT-3.5-turbo based on your Application Insights telemetry data.</em></p></body></html>"
+        },
+        "runAfter": {
+          "parse_ai_response": ["Succeeded"]
+        }
+      },
+      "send_notification_email": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "referenceName": "office365"
+            }
+          },
+          "method": "post",
+          "path": "/v2/Mail",
+          "body": {
+            "To": "@parameters('notification_email')",
+            "Subject": "@outputs('compose_email_content')['subject']",
+            "Body": "@outputs('compose_email_content')['body']",
+            "IsHtml": true,
+            "Importance": "Normal"
+          }
+        },
+        "runAfter": {
+          "compose_email_content": ["Succeeded"]
+        }
+      },
+      "log_completion": {
+        "type": "Compose",
+        "inputs": {
+          "message": "AI Observability analysis completed successfully",
+          "timestamp": "@utcNow()",
+          "recommendations_count": "@length(body('parse_ai_response')?['recommendations'])",
+          "critical_issues_count": "@length(body('parse_ai_response')?['critical_issues'])"
+        },
+        "runAfter": {
+          "send_notification_email": ["Succeeded"]
+        }
+      }
+    },
+    "outputs": {
+      "analysis_results": {
+        "type": "Object",
+        "value": {
+          "timestamp": "@variables('analysis_timestamp')",
+          "services_analyzed": "@variables('services_analyzed')", 
+          "ai_recommendations": "@body('parse_ai_response')",
+          "data_summary": {
+            "performance_rows": "@length(outputs('compose_analysis_data')['performance_data'])",
+            "error_rows": "@length(outputs('compose_analysis_data')['error_data'])",
+            "dapr_rows": "@length(outputs('compose_analysis_data')['dapr_data'])"
+          }
+        }
+      }
+    }
+  },
+  "connectionReferences": {
+    "office365": {
+      "connection": {
+        "id": "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.Web/connections/office365"
+      },
+      "api": {
+        "id": "/subscriptions/{subscription-id}/providers/Microsoft.Web/locations/{location}/managedApis/office365"
+      }
+    }
+  },
+  "parameters": {
+    "$connections": {
+      "value": {
+        "office365": {
+          "id": "/subscriptions/{subscription-id}/providers/Microsoft.Web/locations/{location}/managedApis/office365",
+          "connectionId": "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.Web/connections/office365"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "sample_healthy_response": {
+    "analysis_summary": "System showing good overall health with ProductService averaging 245ms response time and OrderService at 189ms. No critical errors detected in the last 24 hours. DAPR components are functioning normally with minimal latency overhead.",
+    "critical_issues": [],
+    "recommendations": [
+      {
+        "category": "Performance", 
+        "severity": "Medium",
+        "service": "productservice",
+        "issue": "ProductService /api/products endpoint showing 15% higher response time during peak hours (300ms vs 245ms average)",
+        "recommendation": "Implement response caching for product catalog queries using DAPR state store with 5-minute TTL. Add HTTP caching headers and consider read replicas for high-traffic endpoints.",
+        "expected_impact": "Reduce peak response time by 30-40% and improve user experience",
+        "implementation_effort": "Low"
+      },
+      {
+        "category": "Observability",
+        "severity": "Low", 
+        "service": "both",
+        "issue": "Limited custom telemetry for business metrics like order success rate and product popularity",
+        "recommendation": "Add custom Application Insights events for order completion, product view counts, and inventory low-stock alerts. Implement business KPI dashboards.",
+        "expected_impact": "Better business visibility and proactive issue detection",
+        "implementation_effort": "Medium"
+      }
+    ],
+    "metrics_to_track": [
+      "ProductService response time P95 (target: <500ms)",
+      "OrderService order creation success rate (target: >99%)",
+      "DAPR service invocation latency (target: <50ms)",
+      "Redis state store operation duration (target: <10ms)"
+    ],
+    "next_analysis_focus": [
+      "Monitor cache hit rates after implementation",
+      "Analyze business metrics correlation with technical metrics",
+      "Review container resource utilization patterns"
+    ]
+  },
+  
+  "sample_issues_response": {
+    "analysis_summary": "System experiencing moderate performance issues with OrderService showing elevated error rates (8% failure rate) and ProductService having intermittent slow responses. DAPR service invocation between services is experiencing timeout issues during peak load.",
+    "critical_issues": [
+      "OrderService error rate spiked to 8% in the last 6 hours",
+      "DAPR service invocation timeouts between OrderService and ProductService (3.2% failure rate)",
+      "ProductService stock update operations failing during high concurrency"
+    ],
+    "recommendations": [
+      {
+        "category": "Reliability",
+        "severity": "High",
+        "service": "orderservice", 
+        "issue": "OrderService experiencing 8% error rate due to ProductService communication failures and stock validation timeouts",
+        "recommendation": "Implement circuit breaker pattern for ProductService calls with 3-second timeout and 3-retry policy. Add compensation logic for failed stock updates using DAPR pub/sub for eventual consistency.",
+        "expected_impact": "Reduce error rate to <2% and improve order processing reliability",
+        "implementation_effort": "Medium"
+      },
+      {
+        "category": "Performance",
+        "severity": "High",
+        "service": "both",
+        "issue": "DAPR service invocation timeouts occurring during peak load (>100 concurrent requests)",
+        "recommendation": "Scale ProductService to 2-5 replicas with CPU-based auto-scaling (70% threshold). Implement request queuing using DAPR pub/sub for non-urgent stock updates to reduce synchronous call pressure.",
+        "expected_impact": "Eliminate timeout issues and improve system throughput by 40%", 
+        "implementation_effort": "Medium"
+      },
+      {
+        "category": "Performance",
+        "severity": "Medium",
+        "service": "productservice",
+        "issue": "Stock update operations causing database lock contention during high concurrency scenarios",
+        "recommendation": "Implement optimistic concurrency control for stock updates using version fields. Consider batching stock updates every 5 seconds for non-critical operations.",
+        "expected_impact": "Reduce stock update failures by 60% and improve concurrent operation handling",
+        "implementation_effort": "High"
+      },
+      {
+        "category": "Observability",
+        "severity": "Medium",
+        "service": "infrastructure",
+        "issue": "Insufficient alerting for DAPR component failures and service communication timeouts",
+        "recommendation": "Configure Application Insights alerts for: DAPR service invocation failures >2%, response time P95 >1000ms, and container restart events. Set up Slack/Teams notifications for critical alerts.",
+        "expected_impact": "Reduce mean time to detection (MTTD) from hours to minutes",
+        "implementation_effort": "Low"
+      }
+    ],
+    "metrics_to_track": [
+      "OrderService error rate (target: <2%)",
+      "DAPR service invocation success rate (target: >98%)", 
+      "ProductService stock update latency P95 (target: <200ms)",
+      "Container CPU utilization during peak hours (target: <80%)",
+      "Redis state store connection pool utilization (target: <70%)"
+    ],
+    "next_analysis_focus": [
+      "Monitor circuit breaker effectiveness and trip rates",
+      "Analyze scaling behavior under load",
+      "Review concurrency patterns in stock update operations", 
+      "Validate alert notification delivery and response times"
+    ]
+  }
+}

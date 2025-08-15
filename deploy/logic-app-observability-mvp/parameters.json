@@ -1,0 +1,57 @@
+{
+  "description": "Configuration parameters for AI Observability Logic App MVP",
+  "parameters": {
+    "analysis": {
+      "schedule": {
+        "frequency": "Hour",
+        "interval": 6,
+        "description": "Run analysis every 6 hours"
+      },
+      "timeRange": {
+        "hours": 24,
+        "description": "Analyze logs from the last 24 hours"
+      },
+      "services": [
+        "productservice", 
+        "orderservice"
+      ]
+    },
+    "openai": {
+      "model": "gpt-35-turbo",
+      "deployment": "gpt-35-turbo",
+      "maxTokens": 2000,
+      "temperature": 0.3,
+      "description": "Lower temperature for more focused analysis"
+    },
+    "notifications": {
+      "subject": "🤖 AI Observability Analysis Report",
+      "severityThreshold": "Medium",
+      "includeDetails": true
+    },
+    "queries": {
+      "description": "KQL queries for different data types",
+      "performance": {
+        "timespan": "PT24H",
+        "table": "requests"
+      },
+      "errors": {
+        "timespan": "PT24H", 
+        "table": "exceptions"
+      },
+      "dapr": {
+        "timespan": "PT24H",
+        "table": "traces"
+      }
+    }
+  },
+  "environment": {
+    "dev": {
+      "analysis_frequency": "Daily",
+      "detailed_logging": true
+    },
+    "prod": {
+      "analysis_frequency": "Every 6 hours",
+      "detailed_logging": false
+    }
+  }
+}
