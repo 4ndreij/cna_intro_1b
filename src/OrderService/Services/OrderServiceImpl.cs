@@ -190,6 +190,7 @@ public class OrderServiceImpl : IOrderService
         {
             // Try Dapr service invocation first
             var response = await _daprClient.InvokeMethodAsync<ProductDto>(
+                HttpMethod.Get,
                 ProductServiceName, 
                 $"api/products/{productId}");
             

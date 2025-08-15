@@ -33,9 +33,9 @@ cleanup() {
     podman stop $PRODUCT_SERVICE $ORDER_SERVICE 2>/dev/null || true
     podman rm $PRODUCT_SERVICE $ORDER_SERVICE 2>/dev/null || true
     
-    # Stop and remove Dapr sidecars
-    podman stop ${PRODUCT_SERVICE}-dapr ${ORDER_SERVICE}-dapr 2>/dev/null || true
-    podman rm ${PRODUCT_SERVICE}-dapr ${ORDER_SERVICE}-dapr 2>/dev/null || true
+    # Stop and remove Dapr sidecars and placement service
+    podman stop ${PRODUCT_SERVICE}-dapr ${ORDER_SERVICE}-dapr dapr-placement 2>/dev/null || true
+    podman rm ${PRODUCT_SERVICE}-dapr ${ORDER_SERVICE}-dapr dapr-placement 2>/dev/null || true
     
     # Stop Redis (optional - comment out if you want to keep it running)
     # podman stop $REDIS_CONTAINER 2>/dev/null || true
@@ -79,7 +79,7 @@ if ! podman container exists $REDIS_CONTAINER || ! podman container inspect $RED
         --health-interval 30s \
         --health-timeout 3s \
         --health-retries 3 \
-        redis:7-alpine
+        docker.io/redis:7-alpine
     
     echo -e "${GREEN}✅ Redis started${NC}"
 fi
@@ -90,6 +90,19 @@ until podman healthcheck run $REDIS_CONTAINER &>/dev/null; do
     sleep 1
 done
 echo -e "${GREEN}✅ Redis is ready${NC}"
+
+# Start Dapr Placement Service
+echo -e "${YELLOW}🎯 Starting Dapr Placement Service...${NC}"
+podman run -d \
+    --name dapr-placement \
+    --network $NETWORK_NAME \
+    -p 50005:50005 \
+    docker.io/daprio/dapr:1.15.0 \
+    ./placement \
+    --port 50005 \
+    --log-level info
+
+echo -e "${GREEN}✅ Placement Service started${NC}"
 
 # Start ProductService
 echo -e "${YELLOW}🚀 Starting ProductService...${NC}"
@@ -104,7 +117,7 @@ podman run -d \
     -v "$(pwd)/infrastructure/dapr:/dapr/components:ro" \
     $PRODUCT_IMAGE
 
-# Start ProductService Dapr sidecar
+# Start ProductService Dapr sidecar (on dapr-network, connects to app via network)
 echo -e "${YELLOW}🔗 Starting ProductService Dapr sidecar...${NC}"
 podman run -d \
     --name ${PRODUCT_SERVICE}-dapr \
@@ -112,15 +125,18 @@ podman run -d \
     -p 3501:3500 \
     -p 50001:50001 \
     -v "$(pwd)/infrastructure/dapr:/components:ro" \
-    daprio/daprd:1.15.0 \
+    docker.io/daprio/daprd:1.15.0 \
     ./daprd \
     --app-id productservice \
+    --app-channel-address productservice \
     --app-port 8080 \
     --app-protocol http \
     --dapr-http-port 3500 \
     --dapr-grpc-port 50001 \
     --resources-path /components \
-    --placement-host-address dapr_placement:50005 \
+    --placement-host-address dapr-placement:50005 \
+    --enable-app-health-check \
+    --app-health-check-path /health \
     --log-level info
 
 # Start OrderService
@@ -137,7 +153,7 @@ podman run -d \
     -v "$(pwd)/infrastructure/dapr:/dapr/components:ro" \
     $ORDER_IMAGE
 
-# Start OrderService Dapr sidecar
+# Start OrderService Dapr sidecar (on dapr-network, connects to app via network)
 echo -e "${YELLOW}🔗 Starting OrderService Dapr sidecar...${NC}"
 podman run -d \
     --name ${ORDER_SERVICE}-dapr \
@@ -145,15 +161,18 @@ podman run -d \
     -p 3502:3500 \
     -p 50002:50001 \
     -v "$(pwd)/infrastructure/dapr:/components:ro" \
-    daprio/daprd:1.15.0 \
+    docker.io/daprio/daprd:1.15.0 \
     ./daprd \
     --app-id orderservice \
+    --app-channel-address orderservice \
     --app-port 8080 \
     --app-protocol http \
     --dapr-http-port 3500 \
     --dapr-grpc-port 50001 \
     --resources-path /components \
-    --placement-host-address dapr_placement:50005 \
+    --placement-host-address dapr-placement:50005 \
+    --enable-app-health-check \
+    --app-health-check-path /health \
     --log-level info
 
 # Wait for services to start
@@ -189,7 +208,7 @@ echo -e "   Redis: localhost:6379"
 echo ""
 echo -e "${BLUE}🛠️  Management Commands:${NC}"
 echo -e "   View logs: podman logs -f [container-name]"
-echo -e "   Stop all: podman stop $PRODUCT_SERVICE $ORDER_SERVICE ${PRODUCT_SERVICE}-dapr ${ORDER_SERVICE}-dapr"
+echo -e "   Stop all: podman stop $PRODUCT_SERVICE $ORDER_SERVICE ${PRODUCT_SERVICE}-dapr ${ORDER_SERVICE}-dapr dapr-placement"
 echo -e "   View containers: podman ps"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"

@@ -15,6 +15,16 @@ services:
       timeout: 10s
       retries: 3
 
+  # Dapr placement service
+  placement:
+    image: "daprio/dapr:latest"
+    container_name: dapr-placement
+    command: ["./placement", "--port", "50005", "--log-level", "info"]
+    ports:
+      - "50005:50005"
+    networks:
+      - dapr-network
+
   # Zipkin for distributed tracing (optional)
   zipkin:
     image: openzipkin/zipkin-slim
@@ -58,6 +68,7 @@ services:
       "--dapr-grpc-port", "50001",
       "--components-path", "/dapr/components",
       "--config", "/dapr/components/config.yaml",
+      "--placement-host-address", "placement:50005",
       "--log-level", "info"
     ]
     volumes:
@@ -99,6 +110,7 @@ services:
       "--dapr-grpc-port", "50002",
       "--components-path", "/dapr/components",
       "--config", "/dapr/components/config.yaml",
+      "--placement-host-address", "placement:50005",
       "--log-level", "info"
     ]
     volumes:
