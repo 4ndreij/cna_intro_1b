@@ -14,7 +14,7 @@ public class OrderServiceImplTests
     private readonly Mock<OrderDbContext> _mockContext;
     private readonly Mock<DaprClient> _mockDaprClient;
     private readonly Mock<ILogger<OrderServiceImpl>> _mockLogger;
-    private readonly Mock<IHttpClientFactory> _mockHttpClientFactory;
+    private readonly Mock<IProductServiceClient> _mockProductServiceClient;
     private readonly OrderServiceImpl _service;
 
     public OrderServiceImplTests()
@@ -26,13 +26,13 @@ public class OrderServiceImplTests
         _mockContext = new Mock<OrderDbContext>(options);
         _mockDaprClient = new Mock<DaprClient>();
         _mockLogger = new Mock<ILogger<OrderServiceImpl>>();
-        _mockHttpClientFactory = new Mock<IHttpClientFactory>();
+        _mockProductServiceClient = new Mock<IProductServiceClient>();
         
         _service = new OrderServiceImpl(
             _mockContext.Object,
             _mockDaprClient.Object,
             _mockLogger.Object,
-            _mockHttpClientFactory.Object);
+            _mockProductServiceClient.Object);
     }
 
     [Fact]
@@ -46,11 +46,8 @@ public class OrderServiceImplTests
             Quantity: 2
         );
 
-        _mockDaprClient
-            .Setup(x => x.InvokeMethodAsync<ProductDto>(
-                "productservice",
-                $"api/products/{createOrderDto.ProductId}",
-                It.IsAny<CancellationToken>()))
+        _mockProductServiceClient
+            .Setup(x => x.GetProductAsync(createOrderDto.ProductId))
             .ReturnsAsync(null as ProductDto);
 
         // Act & Assert
@@ -83,11 +80,8 @@ public class OrderServiceImplTests
             IsActive: true
         );
 
-        _mockDaprClient
-            .Setup(x => x.InvokeMethodAsync<ProductDto>(
-                "productservice",
-                $"api/products/{productId}",
-                It.IsAny<CancellationToken>()))
+        _mockProductServiceClient
+            .Setup(x => x.GetProductAsync(productId))
             .ReturnsAsync(productDto);
 
         // Act & Assert

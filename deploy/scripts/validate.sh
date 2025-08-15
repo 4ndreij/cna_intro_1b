@@ -143,6 +143,8 @@ run_check_with_output() {
 # Check Prerequisites
 echo -e "${BLUE}📋 Prerequisites${NC}"
 run_check "Azure CLI available" "command -v az"
+run_check "jq JSON processor available" "command -v jq"
+run_check "curl HTTP client available" "command -v curl"
 run_check "Logged into Azure" "az account show"
 run_check "Resource group exists" "az group show --name '$RESOURCE_GROUP'"
 
@@ -150,7 +152,7 @@ run_check "Resource group exists" "az group show --name '$RESOURCE_GROUP'"
 echo ""
 echo -e "${BLUE}🏗️ Infrastructure Resources${NC}"
 run_check "Container Apps Environment" "az containerapp env show --name '$ENVIRONMENT_NAME' --resource-group '$RESOURCE_GROUP'"
-run_check "Container Registry" "az acr show --name '${PREFIX}registry' --resource-group '$RESOURCE_GROUP'"
+run_check "Container Registry" "az acr show --name '${PREFIX//[-]/}registry' --resource-group '$RESOURCE_GROUP'"
 
 # Check Container Apps
 echo ""
@@ -236,7 +238,21 @@ if [[ -n "$PRODUCT_SERVICE_URL" ]] || [[ -n "$ORDER_SERVICE_URL" ]]; then
     if [[ -n "$PRODUCT_SERVICE_URL" ]]; then
         if wait_for_service "ProductService" "$PRODUCT_SERVICE_URL" "/health" $TIMEOUT; then
             run_check_with_output "ProductService health" "curl -s https://$PRODUCT_SERVICE_URL/health"
-            run_check_with_output "ProductService products endpoint" "curl -s https://$PRODUCT_SERVICE_URL/api/products | head -5"
+            
+            # Test seeded data
+            echo -e "${YELLOW}🔍 Testing seeded product data...${NC}"
+            TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+            PRODUCTS_RESPONSE=$(curl -s "https://$PRODUCT_SERVICE_URL/api/products" 2>/dev/null || echo "[]")
+            PRODUCTS_COUNT=$(echo "$PRODUCTS_RESPONSE" | jq '. | length' 2>/dev/null || echo "0")
+            
+            if [[ "$PRODUCTS_COUNT" -gt 0 ]]; then
+                echo -e "${GREEN}✅ PASS - Found $PRODUCTS_COUNT seeded products${NC}"
+                echo "   Sample: $(echo "$PRODUCTS_RESPONSE" | jq -r '.[0].name' 2>/dev/null || echo "N/A")"
+                PASSED_CHECKS=$((PASSED_CHECKS + 1))
+            else
+                echo -e "${RED}❌ FAIL - No seeded products found (seeding issue?)${NC}"
+                FAILED_CHECKS=$((FAILED_CHECKS + 1))
+            fi
         fi
     fi
     
@@ -244,6 +260,84 @@ if [[ -n "$PRODUCT_SERVICE_URL" ]] || [[ -n "$ORDER_SERVICE_URL" ]]; then
         if wait_for_service "OrderService" "$ORDER_SERVICE_URL" "/health" $TIMEOUT; then
             run_check_with_output "OrderService health" "curl -s https://$ORDER_SERVICE_URL/health"
             run_check_with_output "OrderService orders endpoint" "curl -s https://$ORDER_SERVICE_URL/api/orders"
+        fi
+    fi
+    
+    # Test refactored ProductServiceClient integration
+    if [[ -n "$ORDER_SERVICE_URL" && -n "$PRODUCT_SERVICE_URL" && "$PRODUCTS_COUNT" -gt 0 ]]; then
+        echo ""
+        echo -e "${BLUE}🔧 ProductServiceClient Integration Tests${NC}"
+        
+        # Get first product for testing
+        FIRST_PRODUCT_ID=$(echo "$PRODUCTS_RESPONSE" | jq -r '.[0].id' 2>/dev/null)
+        FIRST_PRODUCT_NAME=$(echo "$PRODUCTS_RESPONSE" | jq -r '.[0].name' 2>/dev/null)
+        ORIGINAL_STOCK=$(echo "$PRODUCTS_RESPONSE" | jq -r '.[0].stock' 2>/dev/null)
+        
+        if [[ -n "$FIRST_PRODUCT_ID" && "$FIRST_PRODUCT_ID" != "null" ]]; then
+            echo -e "${YELLOW}🛒 Testing order creation (ProductServiceClient.GetProductAsync + UpdateProductStockAsync)...${NC}"
+            TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+            
+            ORDER_RESPONSE=$(curl -s "https://$ORDER_SERVICE_URL/api/orders" \
+                -H "Content-Type: application/json" \
+                -X POST \
+                -d "{
+                    \"productId\": \"$FIRST_PRODUCT_ID\",
+                    \"customerName\": \"Validation Test User\",
+                    \"customerEmail\": \"validation@example.com\",
+                    \"quantity\": 1
+                }" 2>/dev/null || echo "{}")
+            
+            ORDER_ID=$(echo "$ORDER_RESPONSE" | jq -r '.id' 2>/dev/null)
+            
+            if [[ -n "$ORDER_ID" && "$ORDER_ID" != "null" ]]; then
+                echo -e "${GREEN}✅ PASS - Order created successfully${NC}"
+                echo "   Order ID: $ORDER_ID"
+                echo "   Product: $FIRST_PRODUCT_NAME"
+                PASSED_CHECKS=$((PASSED_CHECKS + 1))
+                
+                # Verify stock was updated via ProductServiceClient
+                sleep 2
+                UPDATED_PRODUCT=$(curl -s "https://$PRODUCT_SERVICE_URL/api/products/$FIRST_PRODUCT_ID" 2>/dev/null || echo "{}")
+                NEW_STOCK=$(echo "$UPDATED_PRODUCT" | jq -r '.stock' 2>/dev/null)
+                
+                echo -e "${YELLOW}📦 Testing stock update via ProductServiceClient...${NC}"
+                TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+                
+                if [[ "$NEW_STOCK" == "$((ORIGINAL_STOCK - 1))" ]]; then
+                    echo -e "${GREEN}✅ PASS - Stock updated correctly ($ORIGINAL_STOCK → $NEW_STOCK)${NC}"
+                    PASSED_CHECKS=$((PASSED_CHECKS + 1))
+                else
+                    echo -e "${RED}❌ FAIL - Stock update failed (Expected: $((ORIGINAL_STOCK - 1)), Got: $NEW_STOCK)${NC}"
+                    FAILED_CHECKS=$((FAILED_CHECKS + 1))
+                fi
+                
+                # Test order cancellation and stock restoration
+                echo -e "${YELLOW}❌ Testing order cancellation (ProductServiceClient.UpdateProductStockAsync)...${NC}"
+                TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+                
+                CANCEL_RESPONSE=$(curl -s "https://$ORDER_SERVICE_URL/api/orders/$ORDER_ID/cancel" \
+                    -H "Content-Type: application/json" \
+                    -X POST \
+                    -d "{\"reason\": \"Validation test cancellation\"}" 2>/dev/null || echo "")
+                
+                # Verify stock was restored
+                sleep 3
+                RESTORED_PRODUCT=$(curl -s "https://$PRODUCT_SERVICE_URL/api/products/$FIRST_PRODUCT_ID" 2>/dev/null || echo "{}")
+                RESTORED_STOCK=$(echo "$RESTORED_PRODUCT" | jq -r '.stock' 2>/dev/null)
+                
+                if [[ "$RESTORED_STOCK" == "$ORIGINAL_STOCK" ]]; then
+                    echo -e "${GREEN}✅ PASS - Stock restored after cancellation ($NEW_STOCK → $RESTORED_STOCK)${NC}"
+                    PASSED_CHECKS=$((PASSED_CHECKS + 1))
+                else
+                    echo -e "${RED}❌ FAIL - Stock restoration failed (Expected: $ORIGINAL_STOCK, Got: $RESTORED_STOCK)${NC}"
+                    FAILED_CHECKS=$((FAILED_CHECKS + 1))
+                fi
+            else
+                echo -e "${RED}❌ FAIL - Order creation failed${NC}"
+                FAILED_CHECKS=$((FAILED_CHECKS + 1))
+            fi
+        else
+            echo -e "${RED}❌ SKIP - Could not get product for testing ProductServiceClient${NC}"
         fi
     fi
 fi

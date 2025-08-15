@@ -99,8 +99,8 @@ if ! az group show --name "$RESOURCE_GROUP" &> /dev/null; then
     exit 1
 fi
 
-# Resource names based on deployment patterns
-REGISTRY_NAME="${PREFIX}registry"
+# Resource names based on deployment patterns (remove dashes for registry name)
+REGISTRY_NAME="${PREFIX//[-]/}registry"
 ENVIRONMENT_NAME="${PREFIX}-env"
 LOG_ANALYTICS_NAME="${PREFIX}-logs"
 APP_INSIGHTS_NAME="${PREFIX}-insights"

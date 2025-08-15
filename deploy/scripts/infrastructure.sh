@@ -19,8 +19,8 @@ LOCATION="$2"
 PREFIX="$3"
 ENVIRONMENT_NAME="$4"
 
-# Resource names
-REGISTRY_NAME="${PREFIX}registry"
+# Resource names (remove dashes for registry name)
+REGISTRY_NAME="${PREFIX//[-]/}registry"
 LOG_ANALYTICS_NAME="${PREFIX}-logs"
 APP_INSIGHTS_NAME="${PREFIX}-insights"
 
@@ -52,7 +52,6 @@ az monitor log-analytics workspace create \
     --location "$LOCATION" \
     --sku PerGB2018 \
     --retention-time 30 \
-    --daily-quota-gb 1 \
     --output none
 
 # Get Log Analytics workspace ID and key
@@ -72,11 +71,19 @@ echo -e "${GREEN}✅ Log Analytics Workspace created: $LOG_ANALYTICS_NAME${NC}"
 
 # Create Application Insights
 echo -e "${YELLOW}📈 Creating Application Insights...${NC}"
+
+# Check if Application Insights extension is installed
+if ! az extension list --output tsv | grep -q application-insights; then
+    echo -e "${YELLOW}📦 Installing Application Insights extension...${NC}"
+    az extension add --name application-insights --allow-preview
+fi
+
+# Create Application Insights with correct workspace reference
 az monitor app-insights component create \
     --app "$APP_INSIGHTS_NAME" \
     --location "$LOCATION" \
     --resource-group "$RESOURCE_GROUP" \
-    --workspace "$LOG_ANALYTICS_WORKSPACE_ID" \
+    --workspace "/subscriptions/$(az account show --query id --output tsv)/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/$LOG_ANALYTICS_NAME" \
     --output none
 
 # Get Application Insights connection string
@@ -88,6 +95,15 @@ APP_INSIGHTS_CONNECTION_STRING=$(az monitor app-insights component show \
 
 echo -e "${GREEN}✅ Application Insights created: $APP_INSIGHTS_NAME${NC}"
 
+# Get Application Insights instrumentation key
+APP_INSIGHTS_INSTRUMENTATION_KEY=$(az monitor app-insights component show \
+    --app "$APP_INSIGHTS_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --query instrumentationKey \
+    --output tsv)
+
+echo -e "${BLUE}📊 Application Insights Key: $APP_INSIGHTS_INSTRUMENTATION_KEY${NC}"
+
 # Create Container Apps Environment
 echo -e "${YELLOW}🏗️ Creating Container Apps Environment...${NC}"
 az containerapp env create \
@@ -96,29 +112,12 @@ az containerapp env create \
     --location "$LOCATION" \
     --logs-workspace-id "$LOG_ANALYTICS_WORKSPACE_ID" \
     --logs-workspace-key "$LOG_ANALYTICS_KEY" \
+    --dapr-instrumentation-key "$APP_INSIGHTS_INSTRUMENTATION_KEY" \
     --enable-workload-profiles false \
     --output none
 
-# Enable Dapr
-echo -e "${YELLOW}⚙️ Configuring Dapr...${NC}"
-az containerapp env dapr-component set \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$ENVIRONMENT_NAME" \
-    --dapr-component-name "default" \
-    --yaml /dev/stdin << EOF
-componentType: configuration
-version: v1
-metadata:
-- name: tracing
-  value:
-    samplingRate: "1"
-    zipkin:
-      endpointAddress: "http://localhost:9411/api/v2/spans"
-- name: logging
-  value:
-    enabled: true
-    level: info
-EOF
+# Enable Dapr (skip default configuration component as it's causing issues)
+echo -e "${YELLOW}⚙️ Dapr enabled with Container Apps Environment${NC}"
 
 echo -e "${GREEN}✅ Container Apps Environment created: $ENVIRONMENT_NAME${NC}"
 

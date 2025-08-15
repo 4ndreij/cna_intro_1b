@@ -12,20 +12,19 @@ public class OrderServiceImpl : IOrderService
     private readonly OrderDbContext _context;
     private readonly DaprClient _daprClient;
     private readonly ILogger<OrderServiceImpl> _logger;
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IProductServiceClient _productServiceClient;
     private const string PubSubName = "product-pubsub";
-    private const string ProductServiceName = "productservice";
 
     public OrderServiceImpl(
         OrderDbContext context,
         DaprClient daprClient,
         ILogger<OrderServiceImpl> logger,
-        IHttpClientFactory httpClientFactory)
+        IProductServiceClient productServiceClient)
     {
         _context = context;
         _daprClient = daprClient;
         _logger = logger;
-        _httpClientFactory = httpClientFactory;
+        _productServiceClient = productServiceClient;
     }
 
     public async Task<IEnumerable<OrderDto>> GetAllOrdersAsync()
@@ -58,7 +57,7 @@ public class OrderServiceImpl : IOrderService
     public async Task<OrderDto> CreateOrderAsync(CreateOrderDto createOrderDto)
     {
         // Get product details from ProductService via Dapr service invocation
-        var productDto = await GetProductFromProductServiceAsync(createOrderDto.ProductId);
+        var productDto = await _productServiceClient.GetProductAsync(createOrderDto.ProductId);
         
         if (productDto == null)
         {
@@ -89,7 +88,7 @@ public class OrderServiceImpl : IOrderService
 
         // Update product stock
         var newStock = productDto.Stock - createOrderDto.Quantity;
-        await UpdateProductStockAsync(createOrderDto.ProductId, newStock);
+        await _productServiceClient.UpdateProductStockAsync(createOrderDto.ProductId, newStock);
 
         // Publish OrderCreated event
         var orderCreatedEvent = new OrderCreatedEvent(
@@ -155,11 +154,11 @@ public class OrderServiceImpl : IOrderService
         // If order is not yet shipped, restore stock
         if (order.Status is OrderStatus.Pending or OrderStatus.Confirmed or OrderStatus.Processing)
         {
-            var productDto = await GetProductFromProductServiceAsync(order.ProductId);
+            var productDto = await _productServiceClient.GetProductAsync(order.ProductId);
             if (productDto != null)
             {
                 var newStock = productDto.Stock + order.Quantity;
-                await UpdateProductStockAsync(order.ProductId, newStock);
+                await _productServiceClient.UpdateProductStockAsync(order.ProductId, newStock);
             }
         }
 
@@ -184,76 +183,6 @@ public class OrderServiceImpl : IOrderService
         return true;
     }
 
-    private async Task<ProductDto?> GetProductFromProductServiceAsync(Guid productId)
-    {
-        try
-        {
-            // Try Dapr service invocation first
-            var response = await _daprClient.InvokeMethodAsync<ProductDto>(
-                HttpMethod.Get,
-                ProductServiceName, 
-                $"api/products/{productId}");
-            
-            return response;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Dapr service invocation failed for product {ProductId}, trying direct HTTP call", productId);
-            
-            // Fallback to direct HTTP call through ProductService
-            try
-            {
-                using var httpClient = _httpClientFactory.CreateClient("ProductService");
-                var directResponse = await httpClient.GetFromJsonAsync<ProductDto>(
-                    $"api/products/{productId}");
-                
-                _logger.LogInformation("Successfully retrieved product {ProductId} via direct HTTP call", productId);
-                return directResponse;
-            }
-            catch (Exception directEx)
-            {
-                _logger.LogError(directEx, "Both Dapr service invocation and direct HTTP call failed for product {ProductId}", productId);
-                return null;
-            }
-        }
-    }
-
-    private async Task UpdateProductStockAsync(Guid productId, int newStock)
-    {
-        try
-        {
-            // Try Dapr service invocation first with HttpRequestMessage for PATCH
-            using var request = _daprClient.CreateInvokeMethodRequest(
-                ProductServiceName,
-                $"api/products/{productId}/stock",
-                new { stock = newStock });
-            request.Method = HttpMethod.Patch;
-            
-            await _daprClient.InvokeMethodAsync(request);
-            
-            _logger.LogInformation("Successfully updated stock for product {ProductId} via Dapr service invocation", productId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Dapr service invocation failed for updating stock of product {ProductId}, trying direct HTTP call", productId);
-            
-            // Fallback to direct HTTP call with PATCH method
-            try
-            {
-                using var httpClient = _httpClientFactory.CreateClient("ProductService");
-                var stockUpdate = new { stock = newStock };
-                var response = await httpClient.PatchAsJsonAsync($"api/products/{productId}/stock", stockUpdate);
-                response.EnsureSuccessStatusCode();
-                
-                _logger.LogInformation("Successfully updated stock for product {ProductId} via direct HTTP call", productId);
-            }
-            catch (Exception directEx)
-            {
-                _logger.LogError(directEx, "Both Dapr service invocation and direct HTTP call failed for updating stock of product {ProductId}", productId);
-                throw;
-            }
-        }
-    }
 
     private async Task PublishEventAsync<T>(string topicName, T eventData)
     {

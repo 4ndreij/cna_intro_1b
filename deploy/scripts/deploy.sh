@@ -128,8 +128,8 @@ if [[ "$ENVIRONMENT" != "dev" ]]; then
     PREFIX="${PREFIX}${ENVIRONMENT}"
 fi
 
-# Set resource names
-REGISTRY_NAME="${PREFIX}registry"
+# Set resource names (remove dashes for registry name)
+REGISTRY_NAME="${PREFIX//[-]/}registry"
 ENVIRONMENT_NAME="${PREFIX}-env"
 
 echo -e "${YELLOW}📋 Deployment Configuration:${NC}"
@@ -220,19 +220,40 @@ az containerapp create \
 # Configure Dapr components
 echo -e "${YELLOW}🔧 Configuring Dapr components...${NC}"
 
-# Create temporary Dapr component files with substituted values
 REDIS_HOST="${PREFIX}-redis:6379"
 
-# State store
-sed "s/{{REDIS_HOST}}/$REDIS_HOST/g" "$DEPLOY_DIR/config/dapr-components/statestore.yml" > /tmp/statestore.yml
+# Create state store component
+echo -e "${YELLOW}📦 Creating Dapr state store component...${NC}"
+cat > /tmp/statestore.yml << EOF
+componentType: state.redis
+version: v1
+metadata:
+- name: redisHost
+  value: "$REDIS_HOST"
+scopes:
+- productservice
+- orderservice
+EOF
+
 az containerapp env dapr-component set \
     --resource-group "$RESOURCE_GROUP" \
     --name "$ENVIRONMENT_NAME" \
     --dapr-component-name statestore \
     --yaml /tmp/statestore.yml
 
-# Pub/Sub
-sed "s/{{REDIS_HOST}}/$REDIS_HOST/g" "$DEPLOY_DIR/config/dapr-components/pubsub.yml" > /tmp/pubsub.yml
+# Create pub/sub component  
+echo -e "${YELLOW}📡 Creating Dapr pub/sub component...${NC}"
+cat > /tmp/pubsub.yml << EOF
+componentType: pubsub.redis
+version: v1
+metadata:
+- name: redisHost
+  value: "$REDIS_HOST"
+scopes:
+- productservice
+- orderservice
+EOF
+
 az containerapp env dapr-component set \
     --resource-group "$RESOURCE_GROUP" \
     --name "$ENVIRONMENT_NAME" \
@@ -241,6 +262,10 @@ az containerapp env dapr-component set \
 
 # Clean up temp files
 rm -f /tmp/statestore.yml /tmp/pubsub.yml
+
+# Get registry credentials
+REGISTRY_USERNAME=$(az acr credential show --name "$REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query username --output tsv)
+REGISTRY_PASSWORD=$(az acr credential show --name "$REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query passwords[0].value --output tsv)
 
 # Deploy ProductService
 echo -e "${YELLOW}📦 Deploying ProductService...${NC}"
@@ -259,6 +284,8 @@ az containerapp create \
     --dapr-app-id productservice \
     --dapr-app-port 8080 \
     --registry-server "$REGISTRY_URL" \
+    --registry-username "$REGISTRY_USERNAME" \
+    --registry-password "$REGISTRY_PASSWORD" \
     --env-vars \
         ASPNETCORE_ENVIRONMENT=Production \
         ASPNETCORE_URLS=http://+:8080 \
@@ -282,6 +309,8 @@ az containerapp create \
     --dapr-app-id orderservice \
     --dapr-app-port 8080 \
     --registry-server "$REGISTRY_URL" \
+    --registry-username "$REGISTRY_USERNAME" \
+    --registry-password "$REGISTRY_PASSWORD" \
     --env-vars \
         ASPNETCORE_ENVIRONMENT=Production \
         ASPNETCORE_URLS=http://+:8080 \
@@ -292,6 +321,12 @@ echo -e "${GREEN}✅ Applications deployed${NC}"
 
 # Get service URLs
 echo -e "${YELLOW}🌐 Retrieving service URLs...${NC}"
+PRODUCT_SERVICE_URL=$(az containerapp show \
+    --name "${PREFIX}-productservice" \
+    --resource-group "$RESOURCE_GROUP" \
+    --query properties.configuration.ingress.fqdn \
+    --output tsv)
+
 ORDER_SERVICE_URL=$(az containerapp show \
     --name "${PREFIX}-orderservice" \
     --resource-group "$RESOURCE_GROUP" \

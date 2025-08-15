@@ -8,7 +8,7 @@ azure:
 
 # Naming Configuration
 naming:
-  prefix: "daprmicro"              # Resource name prefix (will be suffixed with random chars in production)
+  prefix: "aj-daprmicro"              # Resource name prefix (will be suffixed with random chars in production)
   environment: "dev"               # dev, staging, production
   
 # Container Registry Configuration

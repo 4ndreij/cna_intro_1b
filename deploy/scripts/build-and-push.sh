@@ -10,6 +10,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # Parameters
@@ -28,10 +29,17 @@ echo -e "   Registry: $REGISTRY_NAME"
 echo -e "   Project Root: $PROJECT_ROOT"
 echo ""
 
-# Get registry URL and login
-echo -e "${YELLOW}🔑 Logging into Azure Container Registry...${NC}"
+# Get registry URL and credentials
+echo -e "${YELLOW}🔑 Getting Azure Container Registry credentials...${NC}"
 REGISTRY_URL=$(az acr show --name "$REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer --output tsv)
-az acr login --name "$REGISTRY_NAME"
+
+# Get registry credentials
+REGISTRY_USERNAME=$(az acr credential show --name "$REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query username --output tsv)
+REGISTRY_PASSWORD=$(az acr credential show --name "$REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query passwords[0].value --output tsv)
+
+# Login using podman
+echo -e "${YELLOW}🔑 Logging into registry with podman...${NC}"
+podman login "$REGISTRY_URL" --username "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD"
 echo -e "${GREEN}✅ Logged into registry: $REGISTRY_URL${NC}"
 
 # Build ProductService

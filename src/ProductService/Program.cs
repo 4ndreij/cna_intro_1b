@@ -83,13 +83,11 @@ app.MapControllers();
 // Health check endpoint
 app.MapHealthChecks("/health");
 
-// Seed data for development
-if (app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
-    await SeedData.Initialize(context);
-}
+// Seed data for in-memory database (Development and Production demo)
+// Since we're using in-memory database, we need to seed data every time
+using var scope = app.Services.CreateScope();
+var context = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
+await SeedData.Initialize(context);
 
 try
 {

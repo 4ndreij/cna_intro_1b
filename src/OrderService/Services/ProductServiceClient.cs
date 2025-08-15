@@ -1,6 +1,5 @@
 using Dapr.Client;
 using Shared.DTOs;
-using Shared.Exceptions;
 
 namespace OrderService.Services;
 
@@ -9,94 +8,84 @@ namespace OrderService.Services;
 /// </summary>
 public interface IProductServiceClient
 {
-    Task<ProductDto?> GetProductAsync(Guid productId, CancellationToken cancellationToken = default);
-    Task UpdateProductStockAsync(Guid productId, int newStock, CancellationToken cancellationToken = default);
+    Task<ProductDto?> GetProductAsync(Guid productId);
+    Task UpdateProductStockAsync(Guid productId, int newStock);
 }
 
-public class ProductServiceClient : IProductServiceClient
+public class ProductServiceClient(
+    DaprClient daprClient,
+    IHttpClientFactory httpClientFactory,
+    ILogger<ProductServiceClient> logger) : IProductServiceClient
 {
-    private readonly DaprClient _daprClient;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<ProductServiceClient> _logger;
     private const string ProductServiceName = "productservice";
 
-    public ProductServiceClient(
-        DaprClient daprClient,
-        IHttpClientFactory httpClientFactory,
-        ILogger<ProductServiceClient> logger)
-    {
-        _daprClient = daprClient;
-        _httpClientFactory = httpClientFactory;
-        _logger = logger;
-    }
-
-    public async Task<ProductDto?> GetProductAsync(Guid productId, CancellationToken cancellationToken = default)
+    public async Task<ProductDto?> GetProductAsync(Guid productId)
     {
         try
         {
             // Try Dapr service invocation first
-            var response = await _daprClient.InvokeMethodAsync<ProductDto>(
+            var response = await daprClient.InvokeMethodAsync<ProductDto>(
+                HttpMethod.Get,
                 ProductServiceName, 
-                $"api/products/{productId}", 
-                cancellationToken);
+                $"api/products/{productId}");
             
             return response;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Dapr service invocation failed for product {ProductId}, trying direct HTTP call", productId);
+            logger.LogWarning(ex, "Dapr service invocation failed for product {ProductId}, trying direct HTTP call", productId);
             
             // Fallback to direct HTTP call through ProductService
             try
             {
-                using var httpClient = _httpClientFactory.CreateClient("ProductService");
+                using var httpClient = httpClientFactory.CreateClient("ProductService");
                 var directResponse = await httpClient.GetFromJsonAsync<ProductDto>(
-                    $"api/products/{productId}", cancellationToken);
+                    $"api/products/{productId}");
                 
-                _logger.LogInformation("Successfully retrieved product {ProductId} via direct HTTP call", productId);
+                logger.LogInformation("Successfully retrieved product {ProductId} via direct HTTP call", productId);
                 return directResponse;
             }
             catch (Exception directEx)
             {
-                _logger.LogError(directEx, "Both Dapr service invocation and direct HTTP call failed for product {ProductId}", productId);
-                throw new ExternalServiceException("ProductService", $"Failed to retrieve product {productId}", directEx);
+                logger.LogError(directEx, "Both Dapr service invocation and direct HTTP call failed for product {ProductId}", productId);
+                return null;
             }
         }
     }
 
-    public async Task UpdateProductStockAsync(Guid productId, int newStock, CancellationToken cancellationToken = default)
+    public async Task UpdateProductStockAsync(Guid productId, int newStock)
     {
         try
         {
             // Try Dapr service invocation first with HttpRequestMessage for PATCH
-            using var request = _daprClient.CreateInvokeMethodRequest(
+            using var request = daprClient.CreateInvokeMethodRequest(
                 ProductServiceName,
                 $"api/products/{productId}/stock",
                 new { stock = newStock });
             request.Method = HttpMethod.Patch;
             
-            await _daprClient.InvokeMethodAsync(request, cancellationToken);
+            await daprClient.InvokeMethodAsync(request);
             
-            _logger.LogInformation("Successfully updated stock for product {ProductId} via Dapr service invocation", productId);
+            logger.LogInformation("Successfully updated stock for product {ProductId} via Dapr service invocation", productId);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Dapr service invocation failed for updating stock of product {ProductId}, trying direct HTTP call", productId);
+            logger.LogWarning(ex, "Dapr service invocation failed for updating stock of product {ProductId}, trying direct HTTP call", productId);
             
             // Fallback to direct HTTP call with PATCH method
             try
             {
-                using var httpClient = _httpClientFactory.CreateClient("ProductService");
+                using var httpClient = httpClientFactory.CreateClient("ProductService");
                 var stockUpdate = new { stock = newStock };
-                var response = await httpClient.PatchAsJsonAsync($"api/products/{productId}/stock", stockUpdate, cancellationToken);
+                var response = await httpClient.PatchAsJsonAsync($"api/products/{productId}/stock", stockUpdate);
                 response.EnsureSuccessStatusCode();
                 
-                _logger.LogInformation("Successfully updated stock for product {ProductId} via direct HTTP call", productId);
+                logger.LogInformation("Successfully updated stock for product {ProductId} via direct HTTP call", productId);
             }
             catch (Exception directEx)
             {
-                _logger.LogError(directEx, "Both Dapr service invocation and direct HTTP call failed for updating stock of product {ProductId}", productId);
-                throw new ExternalServiceException("ProductService", $"Failed to update stock for product {productId}", directEx);
+                logger.LogError(directEx, "Both Dapr service invocation and direct HTTP call failed for updating stock of product {ProductId}", productId);
+                throw;
             }
         }
     }
