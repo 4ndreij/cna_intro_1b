@@ -311,6 +311,125 @@ param appMemory = '4Gi'
 2. Update deployment script to configure component
 3. Reference component in microservices code
 
+## 🤖 AI-Powered Observability (Optional)
+
+Deploy intelligent monitoring that uses Azure OpenAI to analyze your microservices telemetry and provide actionable insights.
+
+### Quick Deploy
+
+```bash
+# Navigate to observability deployment
+cd deploy/logic-app-observability-mvp
+
+# Deploy AI observability workflow
+./deploy.sh \
+  --resource-group myapp-rg \
+  --app-insights-id "/subscriptions/{subscription}/resourceGroups/myapp-rg/providers/Microsoft.Insights/components/{prefix}-insights" \
+  --notification-email admin@company.com
+```
+
+### What Gets Deployed
+
+| Resource | Purpose |
+|----------|---------|
+| **Azure OpenAI** | GPT-3.5-turbo model for analysis |
+| **Logic App** | Scheduled workflow (every 6 hours) |
+| **Storage Account** | AI-generated reports storage |
+| **Blob Connection** | Logic App integration with storage |
+
+### Features
+
+**Automated Analysis:**
+- **Performance Monitoring**: Request duration, throughput analysis
+- **Error Detection**: Exception patterns and failure correlation
+- **DAPR Insights**: Service mesh performance analysis
+- **Capacity Planning**: Resource utilization recommendations
+
+**AI-Generated Reports:**
+- **Critical Issues**: High-priority problems identified
+- **Optimization Suggestions**: Performance improvement recommendations
+- **Trend Analysis**: Historical pattern recognition
+- **Action Items**: Prioritized implementation roadmap
+
+### Configuration
+
+Update parameters in `deploy/logic-app-observability-mvp/parameters.json`:
+
+```json
+{
+  "deployment": {
+    "resourceGroup": "myapp-rg",
+    "appInsights": {
+      "resourceName": "myapp-insights",
+      "resourceId": "/subscriptions/.../components/myapp-insights"
+    },
+    "notification": {
+      "email": "admin@company.com"
+    }
+  },
+  "analysis": {
+    "schedule": {
+      "frequency": "Hour",
+      "interval": 6
+    },
+    "services": ["productservice", "orderservice"]
+  }
+}
+```
+
+### Monitoring & Reports
+
+**Access Reports:**
+```bash
+# List generated reports
+az storage blob list \
+  --account-name {storage-account} \
+  --container-name emails \
+  --output table
+
+# Download latest report
+az storage blob download \
+  --account-name {storage-account} \
+  --container-name emails \
+  --name "observability-report-{timestamp}.json" \
+  --file report.json
+```
+
+**Sample AI Analysis Output:**
+```json
+{
+  "analysis_summary": "System performance is stable with minor optimization opportunities",
+  "critical_issues": [],
+  "recommendations": [
+    {
+      "category": "Performance",
+      "severity": "Medium", 
+      "service": "productservice",
+      "issue": "Average response time increased 15%",
+      "recommendation": "Consider implementing response caching for frequently accessed products",
+      "expected_impact": "30-40% response time improvement",
+      "implementation_effort": "Low"
+    }
+  ],
+  "metrics_to_track": [
+    "Average response time per service",
+    "Error rate trends",
+    "DAPR communication latency"
+  ]
+}
+```
+
+### Benefits
+
+- **🔍 Proactive Issue Detection**: AI identifies problems before they impact users
+- **📊 Intelligent Analysis**: Goes beyond basic alerting with contextual insights  
+- **💡 Actionable Recommendations**: Specific improvement suggestions with priority
+- **📈 Trend Analysis**: Historical performance understanding
+- **⚡ Automated**: Runs continuously without manual intervention
+
+**Architecture Integration:**
+For detailed technical architecture, see [ARCHITECTURE.md - AI-Powered Observability Pipeline](./ARCHITECTURE.md#ai-powered-observability-pipeline).
+
 ## 🗑️ Cleanup
 
 ### Remove All Resources

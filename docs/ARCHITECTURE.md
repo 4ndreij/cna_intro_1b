@@ -39,6 +39,23 @@ This document describes the architecture of the Dapr-based microservices solutio
 │  │ (Private)   │  │             │  │  (Monitoring)          │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                AI-Powered Observability Pipeline               │
+│                                                                │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────────┐   │
+│  │   Logic     │────▶│   Azure     │────▶│   Blob Storage  │   │
+│  │    App      │     │   OpenAI    │     │   (Reports)     │   │
+│  │ (Scheduler) │     │ (Analysis)  │     │                 │   │
+│  └─────────────┘     └─────────────┘     └─────────────────┘   │
+│         │                                                      │
+│         ▼                                                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │            Application Insights API                    │   │
+│  │     • Performance Data   • Error Logs                 │   │
+│  │     • DAPR Metrics      • Request Tracing             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## 🎯 Architecture Principles
@@ -397,6 +414,76 @@ Dapr Sidecars ──Metrics──> Container Apps Environment
 - **Dapr integration**: Automatic trace generation for Dapr operations
 - **Custom spans**: Application-specific tracing
 - **Correlation IDs**: End-to-end request tracking
+
+### AI-Powered Observability Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                  Observability Analysis Flow                   │
+│                                                                │
+│ Application Insights ──API──> Logic App ──Analyze──> Azure OpenAI │
+│        │                         │                       │      │
+│        ▼                         ▼                       ▼      │
+│   • Performance Data      Schedule (6hrs)         AI Analysis   │
+│   • Error Metrics               │                       │      │
+│   • DAPR Telemetry              ▼                       ▼      │
+│   • Request Traces     Generate Report ──Store──> Blob Storage │
+│                                                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Components:**
+
+**Logic App Workflow:**
+- **Scheduled Trigger**: Runs every 6 hours automatically
+- **Data Collection**: Queries Application Insights via REST API
+- **AI Analysis**: Sends telemetry to Azure OpenAI (GPT-3.5-turbo)
+- **Report Generation**: Creates structured analysis reports
+- **Storage**: Saves reports to Azure Blob Storage
+
+**Data Sources:**
+- **Performance Data**: Request duration, throughput, success rates
+- **Error Analysis**: Exception counts, error patterns, failure modes
+- **DAPR Metrics**: Service mesh performance, communication patterns
+- **Custom Metrics**: Business-specific KPIs and health indicators
+
+**Analysis Capabilities:**
+- **Anomaly Detection**: Identifies performance degradation patterns
+- **Root Cause Analysis**: Correlates errors with system events
+- **Performance Optimization**: Suggests improvements based on telemetry
+- **Capacity Planning**: Predicts scaling needs based on trends
+
+**Output Reports:**
+```json
+{
+  "analysis_summary": "System performance analysis overview",
+  "critical_issues": ["List of high-priority issues identified"],
+  "recommendations": [
+    {
+      "category": "Performance|Reliability|Observability|DAPR",
+      "severity": "High|Medium|Low",
+      "service": "productservice|orderservice|both",
+      "issue": "Specific issue description",
+      "recommendation": "Actionable improvement suggestion",
+      "expected_impact": "Predicted improvement outcome",
+      "implementation_effort": "Low|Medium|High"
+    }
+  ],
+  "metrics_to_track": ["Key metrics for ongoing monitoring"]
+}
+```
+
+**Deployment:**
+- **Infrastructure**: Deployed via Bicep templates
+- **Configuration**: Dynamic parameter injection
+- **Security**: Managed identity for service authentication
+- **Monitoring**: Built-in Logic App execution tracking
+
+**Benefits:**
+- **Proactive Monitoring**: Identifies issues before they impact users
+- **Intelligent Insights**: AI-powered analysis beyond basic alerting
+- **Cost Optimization**: Suggests resource optimization opportunities
+- **Knowledge Base**: Builds historical performance understanding
 
 ## 🔄 CI/CD Architecture
 

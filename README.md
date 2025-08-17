@@ -104,6 +104,7 @@ curl -X POST http://localhost:5002/api/orders \
 ✅ **Cloud Native** - Dapr service mesh, containerized  
 ✅ **Scalable** - Horizontal scaling, load balancing  
 ✅ **Observable** - Structured logging, distributed tracing  
+✅ **AI-Powered Analysis** - Intelligent observability with Azure OpenAI  
 ✅ **Testable** - Unit tests, integration tests, API tests  
 
 ## 🤝 Contributing
