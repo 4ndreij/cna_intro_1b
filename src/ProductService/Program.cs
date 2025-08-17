@@ -18,6 +18,9 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+// Add Application Insights telemetry
+builder.Services.AddApplicationInsightsTelemetry();
+
 // Add services to the container
 builder.Services.AddControllers()
     .AddDapr(daprClientBuilder =>

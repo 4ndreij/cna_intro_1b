@@ -267,6 +267,12 @@ rm -f /tmp/statestore.yml /tmp/pubsub.yml
 REGISTRY_USERNAME=$(az acr credential show --name "$REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query username --output tsv)
 REGISTRY_PASSWORD=$(az acr credential show --name "$REGISTRY_NAME" --resource-group "$RESOURCE_GROUP" --query passwords[0].value --output tsv)
 
+# Get Application Insights configuration for Container Apps telemetry
+echo -e "${YELLOW}📊 Getting Application Insights configuration...${NC}"
+APP_INSIGHTS_INSTRUMENTATION_KEY=$(az monitor app-insights component show --app "${PREFIX}-insights" --resource-group "$RESOURCE_GROUP" --query instrumentationKey --output tsv)
+APP_INSIGHTS_CONNECTION_STRING="InstrumentationKey=${APP_INSIGHTS_INSTRUMENTATION_KEY};IngestionEndpoint=https://eastus2-0.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus2.livediagnostics.monitor.azure.com/"
+echo -e "${GREEN}✅ Application Insights configuration ready${NC}"
+
 # Deploy ProductService
 echo -e "${YELLOW}📦 Deploying ProductService...${NC}"
 az containerapp create \
@@ -289,6 +295,9 @@ az containerapp create \
     --env-vars \
         ASPNETCORE_ENVIRONMENT=Production \
         ASPNETCORE_URLS=http://+:8080 \
+        "APPLICATIONINSIGHTS_INSTRUMENTATION_KEY=$APP_INSIGHTS_INSTRUMENTATION_KEY" \
+        "APPLICATIONINSIGHTS_CONNECTION_STRING=$APP_INSIGHTS_CONNECTION_STRING" \
+        "ASPNETCORE_LOGGING__APPLICATIONINSIGHTS__LOGLEVEL__DEFAULT=Information" \
     --output none
 
 # Deploy OrderService
@@ -315,6 +324,9 @@ az containerapp create \
         ASPNETCORE_ENVIRONMENT=Production \
         ASPNETCORE_URLS=http://+:8080 \
         "Services__ProductServiceUrl=http://productservice" \
+        "APPLICATIONINSIGHTS_INSTRUMENTATION_KEY=$APP_INSIGHTS_INSTRUMENTATION_KEY" \
+        "APPLICATIONINSIGHTS_CONNECTION_STRING=$APP_INSIGHTS_CONNECTION_STRING" \
+        "ASPNETCORE_LOGGING__APPLICATIONINSIGHTS__LOGLEVEL__DEFAULT=Information" \
     --output none
 
 echo -e "${GREEN}✅ Applications deployed${NC}"

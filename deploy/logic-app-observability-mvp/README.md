@@ -7,13 +7,13 @@ A simplified AI-powered observability system that analyzes DAPR microservices te
 This MVP demonstrates how to build an automated observability pipeline that:
 - Queries Application Insights for performance, error, and DAPR telemetry data
 - Uses Azure OpenAI to analyze the data and provide actionable recommendations
-- Sends formatted email reports with AI-generated insights
+- Simulates email delivery by storing reports in Azure Blob Storage as JSON files
 - Runs on a scheduled basis (every 6 hours)
 
 ## Architecture
 
 ```
-Application Insights → Logic App → Azure OpenAI → Email Notification
+Application Insights → Logic App → Azure OpenAI → Blob Storage (Email Simulation)
                                     ↓
                               AI Analysis Engine
 ```
@@ -29,9 +29,14 @@ Application Insights → Logic App → Azure OpenAI → Email Notification
 - **Trigger**: Scheduled (every 6 hours)
 - **Data Sources**: Application Insights KQL queries
 - **Analysis**: AI-powered pattern recognition and recommendations
-- **Output**: HTML email reports with structured insights
+- **Output**: JSON reports stored in Azure Blob Storage (simulates email delivery)
 
-### 3. Application Insights Integration
+### 3. Azure Blob Storage
+- **Purpose**: Email simulation for environments without Office 365 integration
+- **Container**: `emails` for storing observability reports
+- **Format**: JSON files with email metadata and AI analysis content
+
+### 4. Application Insights Integration
 - **Performance Data**: Request duration, success rates, throughput
 - **Error Analysis**: Exception patterns and frequency
 - **DAPR Telemetry**: Service invocation metrics and component health
@@ -46,7 +51,7 @@ Application Insights → Logic App → Azure OpenAI → Email Notification
 
 ### Automated Reporting
 - **Scheduled Execution**: Runs every 6 hours automatically
-- **Rich Email Format**: HTML reports with color-coded severity levels
+- **Blob Storage Output**: JSON files simulating email delivery with structured metadata
 - **Structured Data**: JSON-formatted recommendations for easy parsing
 - **Historical Context**: 24-hour analysis window with trend identification
 
@@ -74,7 +79,8 @@ deploy/logic-app-observability-mvp/
 ### Prerequisites
 - Azure CLI installed and authenticated
 - Existing Application Insights resource with telemetry data
-- Email address for notifications
+- Email address for notifications (used in JSON metadata)
+- Deployment script automatically creates Application Insights API keys
 
 ### Quick Start
 
@@ -84,23 +90,21 @@ deploy/logic-app-observability-mvp/
    ./deploy.sh -g <resource-group> -a <app-insights-resource-id> -e <notification-email>
    ```
 
-2. **Create Application Insights API Key:**
-   - Go to Azure Portal → Application Insights → API Access
-   - Create new API key with "Read telemetry" permission
-   - Copy the API key
+2. **Create Blob Storage Connection:**
+   - Go to Azure Portal → Logic App → API connections
+   - Create new Azure Blob Storage connection
+   - Use the automatically created storage account
 
-3. **Update Logic App Settings:**
-   ```bash
-   az logicapp config appsettings set \
-     --resource-group <resource-group> \
-     --name <logic-app-name> \
-     --settings 'APP_INSIGHTS_API_KEY=<your-api-key>'
-   ```
-
-4. **Deploy Workflow Definition:**
+3. **Deploy Workflow Definition:**
    ```bash
    # The workflow will be automatically deployed with the Logic App
    # Check Azure Portal for workflow status
+   ```
+
+4. **Monitor Reports:**
+   ```bash
+   # Reports are stored in blob storage
+   # Check the emails container for JSON files with observability reports
    ```
 
 ### Advanced Configuration
@@ -159,8 +163,11 @@ The AI provides structured recommendations in these categories:
 - **Observability**: Monitoring improvements, alerting strategies
 - **Cost**: Resource optimization, scaling recommendations
 
-### Email Report Format
-Reports include:
+### JSON Report Format
+Reports stored in blob storage include:
+- **Email Metadata**: Recipients, subject, timestamp, and report type
+- **Content Structure**: HTML body content with structured analysis
+- **Analysis Data**: JSON-formatted AI recommendations
 - 📊 **Analysis Summary**: Overall system health status
 - 🚨 **Critical Issues**: Immediate attention items
 - 💡 **Recommendations**: Prioritized improvement suggestions
@@ -185,15 +192,38 @@ Monitor execution in Azure Portal:
    - Validate Application Insights resource ID
    - Ensure services are generating telemetry
 
-3. **Email Delivery:**
-   - Verify Office 365 connector configuration
-   - Check email address validity and spam filters
+3. **Blob Storage Issues:**
+   - Verify Azure Blob Storage connection configuration
+   - Check storage account permissions and container existence
 
 ### Cost Optimization
 
 - **OpenAI Usage**: ~$0.002 per analysis (2000 tokens)
 - **Logic App**: ~$0.0001 per action execution
 - **Estimated Monthly Cost**: <$5 for 4x daily analysis
+
+## Application Insights Integration
+
+### Automatic SDK Integration
+The deployment includes Application Insights SDK integration for .NET services:
+- **NuGet Package**: `Microsoft.ApplicationInsights.AspNetCore` 2.22.0
+- **Configuration**: Automatic telemetry collection enabled in `Program.cs`
+- **Environment Variables**: Both instrumentation key and connection string configured
+- **Container Apps**: Environment variables set during deployment
+
+### Real Telemetry Collection
+Services automatically send telemetry to Application Insights:
+- **Request Telemetry**: HTTP request duration, success rates, and error codes
+- **Dependency Telemetry**: External service calls and database operations
+- **Exception Telemetry**: Unhandled exceptions with stack traces
+- **Custom Telemetry**: DAPR-specific events and custom metrics
+
+### API Key Management
+The deployment script automatically creates Application Insights API keys:
+- **Dynamic Creation**: No hardcoded keys in deployment scripts
+- **Read Permissions**: Limited to telemetry reading only
+- **Fallback Handling**: Manual instructions if automatic creation fails
+- **Security**: Keys are generated uniquely for each deployment
 
 ## Extension Ideas
 
@@ -203,6 +233,7 @@ This MVP can be extended with:
 - **Anomaly Detection**: ML-based threshold alerting
 - **Incident Correlation**: Link recommendations to actual incidents
 - **Historical Trending**: Long-term pattern analysis and prediction
+- **Email Integration**: Replace blob storage with actual email sending
 
 ## Security Considerations
 
