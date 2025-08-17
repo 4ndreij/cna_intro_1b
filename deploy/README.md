@@ -1,44 +1,21 @@
-# Azure Container Apps Deployment Guide
+# Deployment Quick Start
 
-This folder contains all the necessary scripts, templates, and configurations for deploying the Dapr microservices solution to Azure Container Apps.
-
-## 📁 Folder Structure
-
-```
-deploy/
-├── README.md                    # This file
-├── config/                      # Configuration files
-│   ├── deployment.yml           # Deployment configuration
-│   ├── dapr-components/        # Dapr component configurations
-│   └── parameters/             # Environment-specific parameters
-├── scripts/                     # Deployment scripts
-│   ├── deploy.sh               # Main deployment script
-│   ├── build-and-push.sh       # Container build and push
-│   ├── infrastructure.sh       # Infrastructure setup
-│   ├── cleanup.sh              # Resource cleanup
-│   └── validate.sh             # Post-deployment validation
-├── templates/                   # Bicep templates
-│   ├── main.bicep              # Main infrastructure template
-│   ├── container-apps.bicep    # Container Apps specific resources
-│   └── parameters/             # Parameter files per environment
-└── docs/                       # Documentation
-    ├── DEPLOYMENT.md           # Detailed deployment instructions
-    ├── TROUBLESHOOTING.md      # Common issues and solutions
-    └── ARCHITECTURE.md         # Solution architecture overview
-```
+Quick reference for deploying the cloud-native microservices solution to Azure Container Apps.
 
 ## 🚀 Quick Deploy
 
 ```bash
-# 1. Configure deployment
-cp config/deployment.yml.example config/deployment.yml
-# Edit config/deployment.yml with your settings
+# Deploy main application to Azure Container Apps  
+./scripts/deploy.sh \
+  --resource-group myapp-rg \
+  --location eastus2
 
-# 2. Deploy everything
-./scripts/deploy.sh --env production --resource-group my-microservices-rg
-
-# 3. Validate deployment
-./scripts/validate.sh --env production
+# Deploy AI observability (optional)
+cd logic-app-observability-mvp
+./deploy.sh \
+  --resource-group myapp-rg \
+  --app-insights-id "/subscriptions/.../components/myapp-insights" \
+  --notification-email admin@company.com
 ```
 
 ## 📋 Prerequisites
@@ -54,12 +31,12 @@ cp config/deployment.yml.example config/deployment.yml
 - **Staging**: Pre-production environment
 - **Production**: Production deployment
 
-## 📚 Documentation
+## 📖 Complete Documentation
 
-See `/deploy/docs/` for detailed guides:
-- [Deployment Instructions](docs/DEPLOYMENT.md)
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
-- [Architecture Overview](docs/ARCHITECTURE.md)
+For detailed instructions, see:
+- **[Deployment Guide](../docs/DEPLOYMENT.md)** - Complete deployment procedures
+- **[Architecture](../docs/ARCHITECTURE.md)** - Technical architecture details  
+- **[Troubleshooting](../docs/TROUBLESHOOTING.md)** - Common deployment issues
 
 ## 🏗️ What Gets Deployed
 
