@@ -20,6 +20,31 @@ APP_INSIGHTS_ID=""
 NOTIFICATION_EMAIL=""
 PREFIX="aiobs"
 
+# Function to read and substitute parameters from parameters.json
+load_parameters() {
+    if [[ -f "parameters.json" ]]; then
+        echo -e "${YELLOW}📋 Loading configuration from parameters.json...${NC}"
+        
+        # Create a temporary config file with substituted values
+        cp parameters.json parameters-resolved.json
+        
+        # Substitute environment variables
+        sed -i "s/\${RESOURCE_GROUP}/$RESOURCE_GROUP/g" parameters-resolved.json
+        sed -i "s/\${LOCATION}/$LOCATION/g" parameters-resolved.json
+        sed -i "s/\${PREFIX}/$PREFIX/g" parameters-resolved.json
+        sed -i "s|\${APP_INSIGHTS_ID}|$APP_INSIGHTS_ID|g" parameters-resolved.json
+        sed -i "s/\${NOTIFICATION_EMAIL}/$NOTIFICATION_EMAIL/g" parameters-resolved.json
+        
+        # Extract App Insights name from resource ID
+        APP_INSIGHTS_NAME=$(echo "$APP_INSIGHTS_ID" | sed 's|.*/providers/Microsoft.Insights/components/||')
+        sed -i "s/\${APP_INSIGHTS_NAME}/$APP_INSIGHTS_NAME/g" parameters-resolved.json
+        
+        echo -e "${GREEN}✅ Parameters loaded and resolved${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No parameters.json found, using command line arguments only${NC}"
+    fi
+}
+
 show_help() {
     cat << EOF
 AI Observability Logic App MVP Deployment
@@ -98,7 +123,10 @@ if [[ -z "$NOTIFICATION_EMAIL" ]]; then
     exit 1
 fi
 
-# Resource names
+# Load parameters after command line parsing
+load_parameters
+
+# Resource names (using prefix from parameters or command line)
 OPENAI_NAME="${PREFIX}-openai"
 LOGIC_APP_NAME="${PREFIX}-logicapp"
 STORAGE_NAME="${PREFIX//[-]/}storage$(date +%s)"
@@ -236,6 +264,12 @@ echo -e "${YELLOW}🔑 Creating Application Insights API Key for Logic App...${N
 APP_INSIGHTS_NAME=$(echo "$APP_INSIGHTS_ID" | sed 's|.*/providers/Microsoft.Insights/components/||')
 
 APP_INSIGHTS_API_KEY_NAME="logic-app-observability-$(date +%s)"
+# Get Log Analytics workspace ID (same as App Insights in most cases)
+LOG_ANALYTICS_WORKSPACE_ID=$(az monitor app-insights component show \
+    --ids "$APP_INSIGHTS_ID" \
+    --query "properties.WorkspaceResourceId" \
+    --output tsv 2>/dev/null || echo "")
+
 APP_INSIGHTS_API_KEY=$(az monitor app-insights api-key create \
     --app "$APP_INSIGHTS_NAME" \
     --resource-group "$RESOURCE_GROUP" \
@@ -302,20 +336,33 @@ echo -e "${GREEN}✅ Azure Blob Storage connection created${NC}"
 # Deploy Logic App with full workflow
 echo -e "${YELLOW}🔄 Deploying Logic App with complete observability workflow...${NC}"
 
-# Update the workflow template with current parameters
-cp logic-app-workflow.json logic-app-workflow-deploy.json
+# Create dynamic workflow definition from template
+create_workflow_definition() {
+    echo -e "${YELLOW}🔧 Creating dynamic workflow definition...${NC}"
+    
+    # Copy workflow template
+    cp logic-app-workflow.json logic-app-workflow-deploy.json
+    
+    # Get current subscription ID
+    SUBSCRIPTION_ID=$(az account show --query id --output tsv)
+    
+    # Replace all template variables with actual values
+    sed -i "s|{{OPENAI_ENDPOINT}}|$OPENAI_ENDPOINT|g" logic-app-workflow-deploy.json
+    sed -i "s|{{OPENAI_API_KEY}}|$OPENAI_API_KEY|g" logic-app-workflow-deploy.json
+    sed -i "s|{{APP_INSIGHTS_APP_ID}}|$APP_INSIGHTS_APP_ID|g" logic-app-workflow-deploy.json
+    sed -i "s|{{APP_INSIGHTS_API_KEY}}|$APP_INSIGHTS_API_KEY|g" logic-app-workflow-deploy.json
+    sed -i "s|{{LOG_ANALYTICS_WORKSPACE_ID}}|$LOG_ANALYTICS_WORKSPACE_ID|g" logic-app-workflow-deploy.json
+    sed -i "s|{{NOTIFICATION_EMAIL}}|$NOTIFICATION_EMAIL|g" logic-app-workflow-deploy.json
+    sed -i "s|{{STORAGE_ACCOUNT_NAME}}|$STORAGE_NAME|g" logic-app-workflow-deploy.json
+    sed -i "s|{{SUBSCRIPTION_ID}}|$SUBSCRIPTION_ID|g" logic-app-workflow-deploy.json
+    sed -i "s|{{RESOURCE_GROUP}}|$RESOURCE_GROUP|g" logic-app-workflow-deploy.json
+    sed -i "s|{{LOCATION}}|$LOCATION|g" logic-app-workflow-deploy.json
+    
+    echo -e "${GREEN}✅ Dynamic workflow definition created${NC}"
+}
 
-# Update parameters with actual values
-sed -i 's|"defaultValue": "867042431c75441bafa312eead733c7d"|"defaultValue": "'$OPENAI_API_KEY'"|' logic-app-workflow-deploy.json
-sed -i 's|"defaultValue": "0662b407-b62e-4e2d-a8b0-a9f0dc28893f"|"defaultValue": "'$APP_INSIGHTS_APP_ID'"|' logic-app-workflow-deploy.json
-sed -i 's|"defaultValue": "cheqc2k6xt4gd5ddidkxrnsers4wtwl8enpm7z8e"|"defaultValue": "'$APP_INSIGHTS_API_KEY'"|' logic-app-workflow-deploy.json
-sed -i 's|"defaultValue": "admin@example.com"|"defaultValue": "'$NOTIFICATION_EMAIL'"|' logic-app-workflow-deploy.json
-sed -i 's|"defaultValue": "aiobsstorage1755328600"|"defaultValue": "'$STORAGE_NAME'"|' logic-app-workflow-deploy.json
-
-# Update connection references to use current resource group and subscription
-SUBSCRIPTION_ID=$(az account show --query id --output tsv)
-sed -i 's|cna-observability-demo-rg|'$RESOURCE_GROUP'|g' logic-app-workflow-deploy.json
-sed -i 's|b4852309-dbd4-4520-9c64-3e8ea7353799|'$SUBSCRIPTION_ID'|g' logic-app-workflow-deploy.json
+# Create the dynamic workflow definition
+create_workflow_definition
 
 # Deploy the full workflow
 az logic workflow create \
@@ -325,8 +372,8 @@ az logic workflow create \
     --definition @logic-app-workflow-deploy.json \
     --output none
 
-# Clean up temporary file
-rm -f logic-app-workflow-deploy.json
+# Clean up temporary files
+rm -f logic-app-workflow-deploy.json parameters-resolved.json
 
 echo -e "${GREEN}✅ Logic App with complete workflow deployed${NC}"
 

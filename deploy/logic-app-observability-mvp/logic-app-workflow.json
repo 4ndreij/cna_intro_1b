@@ -5,31 +5,31 @@
     "parameters": {
       "openai_endpoint": {
         "type": "string",
-        "defaultValue": "https://eastus2.api.cognitive.microsoft.com/"
+        "defaultValue": "{{OPENAI_ENDPOINT}}"
       },
       "openai_api_key": {
         "type": "string",
-        "defaultValue": "6c5fc1bc856f40f09cd2721ed006e0b5"
+        "defaultValue": "{{OPENAI_API_KEY}}"
       },
       "app_insights_app_id": {
         "type": "string", 
-        "defaultValue": "5c44ea68-554a-4124-938b-03ed907f7bee"
+        "defaultValue": "{{APP_INSIGHTS_APP_ID}}"
       },
       "app_insights_api_key": {
         "type": "string",
-        "defaultValue": "1437suyjki7viawpgll73573lznb4nilchkfs0ia"
+        "defaultValue": "{{APP_INSIGHTS_API_KEY}}"
       },
       "log_analytics_workspace_id": {
         "type": "string",
-        "defaultValue": "23e5229d-14b2-4bb0-958e-ccdd1ae5ecf4"
+        "defaultValue": "{{LOG_ANALYTICS_WORKSPACE_ID}}"
       },
       "notification_email": {
         "type": "string",
-        "defaultValue": "admin@example.com"
+        "defaultValue": "{{NOTIFICATION_EMAIL}}"
       },
       "storage_account_name": {
         "type": "string",
-        "defaultValue": "aiobsstorage1755417713"
+        "defaultValue": "{{STORAGE_ACCOUNT_NAME}}"
       },
       "$connections": {
         "defaultValue": {},
@@ -304,10 +304,10 @@
   "connectionReferences": {
     "azureblob": {
       "connection": {
-        "id": "/subscriptions/b4852309-dbd4-4520-9c64-3e8ea7353799/resourceGroups/aj-daprmicro-rg/providers/Microsoft.Web/connections/azureblob"
+        "id": "/subscriptions/{{SUBSCRIPTION_ID}}/resourceGroups/{{RESOURCE_GROUP}}/providers/Microsoft.Web/connections/azureblob"
       },
       "api": {
-        "id": "/subscriptions/b4852309-dbd4-4520-9c64-3e8ea7353799/providers/Microsoft.Web/locations/eastus2/managedApis/azureblob"
+        "id": "/subscriptions/{{SUBSCRIPTION_ID}}/providers/Microsoft.Web/locations/{{LOCATION}}/managedApis/azureblob"
       }
     }
   },
@@ -315,9 +315,9 @@
     "$connections": {
       "value": {
         "azureblob": {
-          "connectionId": "/subscriptions/b4852309-dbd4-4520-9c64-3e8ea7353799/resourceGroups/aj-daprmicro-rg/providers/Microsoft.Web/connections/azureblob",
+          "connectionId": "/subscriptions/{{SUBSCRIPTION_ID}}/resourceGroups/{{RESOURCE_GROUP}}/providers/Microsoft.Web/connections/azureblob",
           "connectionName": "azureblob",
-          "id": "/subscriptions/b4852309-dbd4-4520-9c64-3e8ea7353799/providers/Microsoft.Web/locations/eastus2/managedApis/azureblob"
+          "id": "/subscriptions/{{SUBSCRIPTION_ID}}/providers/Microsoft.Web/locations/{{LOCATION}}/managedApis/azureblob"
         }
       }
     }

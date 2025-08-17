@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "description": "Template for Logic App Observability deployment parameters",
+  "parameters": {
+    "environment": {
+      "value": "dev"
+    },
+    "resourceGroup": {
+      "value": "REPLACE_WITH_RESOURCE_GROUP"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "prefix": {
+      "value": "aiobs"
+    },
+    "notification": {
+      "email": "REPLACE_WITH_EMAIL"
+    },
+    "appInsights": {
+      "resourceName": "REPLACE_WITH_APP_INSIGHTS_NAME",
+      "resourceId": "REPLACE_WITH_APP_INSIGHTS_RESOURCE_ID"
+    },
+    "services": {
+      "analyzed": ["productservice", "orderservice"]
+    },
+    "analysis": {
+      "schedule": {
+        "frequency": "Hour",
+        "interval": 6
+      },
+      "timeRange": {
+        "hours": 24
+      }
+    },
+    "openai": {
+      "model": "gpt-35-turbo",
+      "deployment": "gpt-35-turbo",
+      "maxTokens": 1500,
+      "temperature": 0.3
+    }
+  }
+}

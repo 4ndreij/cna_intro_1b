@@ -1,5 +1,17 @@
 {
   "description": "Configuration parameters for AI Observability Logic App MVP",
+  "deployment": {
+    "resourceGroup": "${RESOURCE_GROUP}",
+    "location": "${LOCATION}",
+    "prefix": "${PREFIX}",
+    "appInsights": {
+      "resourceName": "${APP_INSIGHTS_NAME}",
+      "resourceId": "${APP_INSIGHTS_ID}"
+    },
+    "notification": {
+      "email": "${NOTIFICATION_EMAIL}"
+    }
+  },
   "parameters": {
     "analysis": {
       "schedule": {
