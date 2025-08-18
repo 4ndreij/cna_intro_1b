@@ -1,0 +1,88 @@
+---
+title: Cloud-Native Microservices with Dapr - Azure Architecture
+---
+flowchart TB
+    subgraph "Internet"
+        U[Users/Clients]
+    end
+
+    subgraph "Azure Container Apps Environment"
+        direction TB
+        
+        subgraph "Container Apps"
+            direction LR
+            
+            subgraph "ProductService Pod"
+                PS[ProductService<br/>.NET 8 API]
+                PSD[Dapr Sidecar<br/>Port 3500]
+                PS --- PSD
+            end
+            
+            subgraph "OrderService Pod"
+                OS[OrderService<br/>.NET 8 API]
+                OSD[Dapr Sidecar<br/>Port 3501]
+                OS --- OSD
+            end
+            
+            subgraph "Redis Pod"
+                R[Redis Container<br/>State Store & Pub/Sub]
+            end
+        end
+        
+        subgraph "Dapr Control Plane"
+            DC[Dapr Operator<br/>Service Discovery<br/>Configuration]
+        end
+        
+        PSD -.->|Service Mesh| OSD
+        PSD -.->|State Store| R
+        OSD -.->|State Store| R
+        PSD -.->|Pub/Sub| R
+        OSD -.->|Pub/Sub| R
+        DC -.->|Manages| PSD
+        DC -.->|Manages| OSD
+    end
+
+    subgraph "AI Observability Pipeline"
+        direction TB
+        
+        LA[Logic App<br/>Scheduled Analysis<br/>Every 6 hours]
+        AOI[Azure OpenAI<br/>GPT-3.5-turbo<br/>Analysis Engine]
+        BS[Blob Storage<br/>AI Reports & Insights]
+        
+        LA --> AOI
+        AOI --> BS
+    end
+
+    subgraph "Azure Supporting Services"
+        direction TB
+        
+        ACR[Azure Container Registry<br/>Private Image Storage]
+        AI[Application Insights<br/>Telemetry & Monitoring]
+        LAW[Log Analytics Workspace<br/>Centralized Logging]
+    end
+
+    U -->|HTTPS| PS
+    U -->|HTTPS| OS
+    
+    PS -.->|Telemetry| AI
+    OS -.->|Telemetry| AI
+    R -.->|Metrics| AI
+    
+    AI -->|Logs & Metrics| LAW
+    AI -->|API Queries| LA
+    
+    ACR -.->|Container Images| PS
+    ACR -.->|Container Images| OS
+    ACR -.->|Container Images| R
+
+    classDef serviceBox fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000
+    classDef daprBox fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
+    classDef azureBox fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef aiBox fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px,color:#000
+    classDef userBox fill:#ffebee,stroke:#b71c1c,stroke-width:2px,color:#000
+
+    class PS,OS serviceBox
+    class PSD,OSD,DC,R daprBox
+    class ACR,AI,LAW azureBox
+    class LA,AOI,BS aiBox
+    class U userBox
